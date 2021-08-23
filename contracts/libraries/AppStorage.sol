@@ -74,6 +74,8 @@ struct AppStorage {
     mapping(address => mapping(uint256 => uint256)) erc1155TokensIndex; //Contract => TokenID => Amount being auctionned
     mapping(address => mapping(uint256 => uint256)) erc1155TokensUnderAuction; //Contract => TokenID => Amount being auctionned
     bytes backendPubKey;
+    bytes32 domainSeparator;
+    mapping(address => uint256) metaNonces;
 }
 
 contract Modifiers {

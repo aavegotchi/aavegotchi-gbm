@@ -13,6 +13,7 @@ import "../interfaces/Ownable.sol";
 import "../libraries/AppStorage.sol";
 import "../libraries/LibDiamond.sol";
 import "../libraries/LibSignature.sol";
+import "../libraries/LibMeta.sol";
 
 /// @title GBM auction contract
 /// @dev See GBM.auction on how to use this contract
@@ -48,6 +49,7 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         uint256 _bidAmount,
         uint256 _highestBid
     ) internal {
+        address sender = LibMeta.msgSender();
         require(s.collections[s.tokenMapping[_auctionId].contractAddress].biddingAllowed, "bid: bidding is currently not allowed");
 
         require(_bidAmount > 1, "bid: _bidAmount cannot be 0");
@@ -70,7 +72,7 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         );
 
         //Transfer the money of the bidder to the GBM smart contract
-        IERC20(s.erc20Currency).transferFrom(msg.sender, address(this), _bidAmount);
+        IERC20(s.erc20Currency).transferFrom(sender, address(this), _bidAmount);
 
         //Extend the duration time of the auction if we are close to the end
         if (getAuctionEndTime(_auctionId) < block.timestamp + getAuctionHammerTimeDuration(_auctionId)) {
@@ -93,13 +95,13 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
             emit Auction_IncentivePaid(_auctionId, previousHighestBidder, duePay);
         }
 
-        emit Auction_BidPlaced(_auctionId, msg.sender, _bidAmount);
+        emit Auction_BidPlaced(_auctionId, sender, _bidAmount);
 
         // Calculating incentives for the new bidder
         s.auctions[_auctionId].dueIncentives = calculateIncentives(_auctionId, _bidAmount);
 
         //Setting the new bid/bidder as the highest bid/bidder
-        s.auctions[_auctionId].highestBidder = msg.sender;
+        s.auctions[_auctionId].highestBidder = sender;
         s.auctions[_auctionId].highestBid = _bidAmount;
 
         if ((previousHighestBid + duePay) != 0) {
@@ -228,6 +230,7 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         uint256 _1155Index,
         bool _rewrite
     ) internal {
+        address sender = LibMeta.msgSender();
         if (!_rewrite) {
             _1155Index = s.erc1155TokensIndex[_tokenContract][_tokenId]; //_1155Index was 0 if creating new auctions
             require(s.auctionMapping[_tokenContract][_tokenId][_1155Index] == 0, "The auction aleady exist for the specified token");
@@ -251,7 +254,7 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
 
         if (_tokenKind == bytes4(keccak256("ERC721"))) {
             require(
-                msg.sender == Ownable(_tokenContract).owner() || address(this) == IERC721(_tokenContract).ownerOf(_tokenId),
+                sender == Ownable(_tokenContract).owner() || address(this) == IERC721(_tokenContract).ownerOf(_tokenId),
                 "registerAnAuctionToken: the specified ERC-721 token cannot be auctioned"
             );
 
@@ -259,7 +262,7 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
             s.auctionMapping[_tokenContract][_tokenId][0] = _auctionId;
         } else {
             require(
-                msg.sender == Ownable(_tokenContract).owner() ||
+                sender == Ownable(_tokenContract).owner() ||
                     s.erc1155TokensUnderAuction[_tokenContract][_tokenId] < IERC1155(_tokenContract).balanceOf(address(this), _tokenId),
                 "registerAnAuctionToken:  the specified ERC-1155 token cannot be auctionned"
             );
@@ -472,8 +475,9 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         uint256 _tokenIDStart,
         uint256 _tokenIDEnd
     ) external onlyOwner {
+        address sender = LibMeta.msgSender();
         while (_tokenIDStart < _tokenIDEnd) {
-            IERC721(_ERC721Contract).safeTransferFrom(msg.sender, _GBM, _tokenIDStart, "");
+            IERC721(_ERC721Contract).safeTransferFrom(sender, _GBM, _tokenIDStart, "");
             registerAnAuctionToken(_ERC721Contract, _tokenIDStart, bytes4(keccak256("ERC721")), _useInitiator);
 
             _tokenIDStart++;
@@ -488,8 +492,9 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         uint256 _indexStart,
         uint256 _indexEnd
     ) external onlyOwner {
+        address sender = LibMeta.msgSender();
         registerAnAuctionContract(_ERC1155Contract);
-        IERC1155(_ERC1155Contract).safeTransferFrom(msg.sender, _GBM, _tokenID, _indexEnd - _indexStart, "");
+        IERC1155(_ERC1155Contract).safeTransferFrom(sender, _GBM, _tokenID, _indexEnd - _indexStart, "");
         while (_indexStart < _indexEnd) {
             registerAnAuctionToken(_ERC1155Contract, _tokenID, bytes4(keccak256("ERC1155")), _useInitiator);
             _indexStart++;

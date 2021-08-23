@@ -72,6 +72,7 @@ async function deployDiamond() {
     "OwnershipFacet",
     "SettingsFacet",
     "GBMFacet",
+    "MetaTransactionsFacet",
   ];
   const cut = [];
   for (const FacetName of FacetNames) {
