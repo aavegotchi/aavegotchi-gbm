@@ -49,11 +49,11 @@ interface AuctionERC721Config {
   gbm: string;
 }
 
-const startTime = 1629986400; //Aug 26, 2PM UTC
-const endTime = 1630245600; //Aug 29, 2PM UTC
+const startTime = Math.floor(Date.now() / 1000); //Aug 26, 2PM UTC
+const endTime = Math.floor(Date.now() / 1000) + 86400 * 2; //Aug 29, 2PM UTC
 
 export default <AuctionERC721Config>{
-  id: "auction-haunt2-test", // huamn id
+  id: "realm auction 1", // huamn id
   auctionPresets: {
     none: {
       startTime: startTime,

@@ -94,3 +94,15 @@ By default bidding/claiming is prevented.
 ### Claim
 
 Once an auction as ended, anyone (including the winner) can call _claim(auctionID)_ to attribute the tokens to the highest bidder at the end of the auction and distribute the proceeds of the auction to the GBM contract owner.
+
+## Deployed Contract Addresses
+
+### Kovan
+
+- Diamond deployed: 0xf757a7B19A077c87Dd3330f2c948609bEEde59ca
+- DiamondCutFacet deployed: 0xa8dA0D3ad9B425671533Dc6e9db3615627d31DfE
+- DiamondInit deployed: 0xfce2294997D0b2A027B3Fdb169B8F5C78f54495B
+- DiamondLoupeFacet deployed: 0xfce2294997D0b2A027B3Fdb169B8F5C78f54495B
+- OwnershipFacet deployed: 0xfce2294997D0b2A027B3Fdb169B8F5C78f54495B
+- SettingsFacet deployed: 0xfce2294997D0b2A027B3Fdb169B8F5C78f54495B
+- GBMFacet deployed: 0xfce2294997D0b2A027B3Fdb169B8F5C78f54495B
