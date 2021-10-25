@@ -4,10 +4,14 @@ import "@nomiclabs/hardhat-ethers";
 import "hardhat-contract-sizer";
 import { task } from "hardhat/config";
 import * as dotenv from "dotenv";
+
+import "@typechain/hardhat";
+
 dotenv.config({ path: __dirname + "/.env" });
 require("./tasks/generateDiamondABI.js");
 require("./tasks/verifyFacet.js");
 require("./tasks/massRegisterERC721.ts");
+require("./tasks/deployUpgrade");
 
 // This is a sample Buidler task. To learn how to create your own go to
 // https://buidler.dev/guides/create-task.html

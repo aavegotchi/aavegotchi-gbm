@@ -12,3 +12,5 @@ logs/kovan
 cache
 cache/
 logs
+typechain
+bin

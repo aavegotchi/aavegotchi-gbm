@@ -118,6 +118,10 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         }
     }
 
+    function updatePlayerRewardsAddress(address _newAddress) external onlyOwner {
+        s.playerRewards = _newAddress;
+    }
+
     /// @notice Attribute a token to the winner of the auction and distribute the proceeds to the owner of this contract.
     /// throw if bidding is disabled or if the auction is not finished.
     /// @param _auctionId The auctionId of the auction to complete
