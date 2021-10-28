@@ -1,1 +1,1 @@
-export const gasPrice = 50000000000;
+export const gasPrice = 100000000000;

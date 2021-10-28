@@ -11,6 +11,7 @@ import { AuctionPreset } from "../types";
 import { Contract } from "@ethersproject/contracts";
 import { BigNumber } from "@ethersproject/bignumber";
 import { request } from "graphql-request";
+import { SettingsFacet } from "../typechain";
 
 export interface MassRegisterERC721TaskArgs {
   gbmDiamondAddress: string;
@@ -49,7 +50,7 @@ task("massRegisterERC721", "Mass registers ERC721 in auction")
         );
       }
 
-      let testing = ["hardhat"].includes(hre.network.name);
+      let testing = ["hardhat", "localhost"].includes(hre.network.name);
       let nonceManagedSigner;
 
       if (testing) {
@@ -79,23 +80,13 @@ task("massRegisterERC721", "Mass registers ERC721 in auction")
         taskArgs.gbmDiamondAddress,
         nonceManagedSigner
       );
-      const gbmInitiator = await hre.ethers.getContractAt(
+      const settingsFacet = (await hre.ethers.getContractAt(
         "SettingsFacet",
         taskArgs.gbmDiamondAddress,
         nonceManagedSigner
-      );
+      )) as SettingsFacet;
 
-      //Begin Auctions
-
-      console.log(`Setting Preset for ${chalk.red(preset)}`);
-      const presetInfo = auctionConfig.auctionPresets[preset];
-      const tx = await gbmInitiator.setInitiatorInfo(presetInfo, {
-        gasPrice: gasPrice,
-      });
-
-      await tx.wait();
-
-      const initiatorInfo = await gbmInitiator.getInitiatorInfo();
+      const initiatorInfo = await settingsFacet.getInitiatorInfo();
       console.log(
         "start time:",
         new Date(Number(initiatorInfo.startTime.toString()) * 1000)
@@ -106,6 +97,34 @@ task("massRegisterERC721", "Mass registers ERC721 in auction")
       );
 
       console.log("Bid Multiplier:", initiatorInfo.bidMultiplier.toString());
+
+      const presetInfo = auctionConfig.auctionPresets[preset];
+
+      if (
+        initiatorInfo.bidMultiplier.toString() !==
+          presetInfo.bidMultiplier.toString() ||
+        initiatorInfo.startTime.toString() !==
+          presetInfo.startTime.toString() ||
+        initiatorInfo.endTime.toString() !== presetInfo.endTime.toString()
+      ) {
+        console.log(
+          `Setting Preset for ${chalk.red(
+            preset
+          )} with begin time of ${new Date(
+            Number(presetInfo.startTime.toString()) * 1000
+          )} and end time of ${new Date(
+            Number(presetInfo.endTime.toString()) * 1000
+          )}`
+        );
+
+        const tx = await settingsFacet.setInitiatorInfo(presetInfo, {
+          gasPrice: gasPrice,
+        });
+
+        await tx.wait();
+      } else {
+        console.log(`Preset is already set for ${chalk.red(preset)}, LFG!`);
+      }
 
       //Change this to correct preset
       if (
@@ -141,7 +160,7 @@ async function deployAuction(
 ) {
   let totalGasUsed: BigNumber = hre.ethers.BigNumber.from("0");
 
-  console.log(`Presets are set for ${preset.toUpperCase()}, LFG!`);
+  console.log("Deploying auctions for ids:", tokenIds.join(","));
 
   const erc721 = await hre.ethers.getContractAt(
     "ERC721Generic",
@@ -149,20 +168,19 @@ async function deployAuction(
     nonceManagedSigner
   );
 
-  tokenIds.forEach(async (id) => {
-    const owner = await erc721.ownerOf(id);
-    console.log("owner:", owner);
-  });
-
   const approval = await erc721.isApprovedForAll(deployer, gbmAddress);
-  console.log("approval:", approval);
 
   const balanceOf = await erc721?.balanceOf(deployer);
   console.log("Deployer address balance:", balanceOf.toString());
 
   if (!approval) {
-    const tx = await erc721?.setApprovalForAll(gbmAddress, true);
+    console.log("Setting approval");
+    const tx = await erc721?.setApprovalForAll(gbmAddress, true, {
+      gasPrice: gasPrice,
+    });
     await tx.wait();
+  } else {
+    console.log("Approved to transfer!:");
   }
 
   console.log(

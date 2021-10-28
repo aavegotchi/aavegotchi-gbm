@@ -1,40 +1,14 @@
-//@ts-ignore
-import hardhat, { run, ethers } from "hardhat";
-
-const gasPrice = 20000000000;
+import { run, ethers } from "hardhat";
+import { TransferOwnershipTaskArgs } from "../tasks/transferOwnership";
 
 async function transferOwner() {
-  const accounts = await ethers.getSigners();
+  console.log("Transferring owner");
+  const taskArgs: TransferOwnershipTaskArgs = {
+    newOwner: "0x94cb5C277FCC64C274Bd30847f0821077B231022",
+    useMultisig: true,
+  };
 
-  const diamondAddress = "0xa44c8e0eCAEFe668947154eE2b803Bd4e6310EFe";
-  let currentOwner = "";
-  let signer: any;
-
-  // deploy DiamondCutFacet
-
-  const testing = ["hardhat", "localhost"].includes(hardhat.network.name);
-
-  if (testing) {
-    await hardhat.network.provider.request({
-      method: "hardhat_impersonateAccount",
-      params: [currentOwner],
-    });
-    signer = await ethers.provider.getSigner(currentOwner);
-  } else if (hardhat.network.name === "matic") {
-    signer = accounts[0];
-  } else {
-    throw Error("Incorrect network selected");
-  }
-
-  //transfer ownership to multisig
-  const ownershipFacet = await ethers.getContractAt(
-    "OwnershipFacet",
-    diamondAddress,
-    signer
-  );
-
-  currentOwner = await ownershipFacet.owner();
-  console.log("new owner:", currentOwner);
+  await run("transferOwnership", taskArgs);
 }
 
 // We recommend this pattern to be able to use async/await everywhere

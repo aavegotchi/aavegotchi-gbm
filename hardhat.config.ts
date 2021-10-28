@@ -12,6 +12,7 @@ require("./tasks/generateDiamondABI.js");
 require("./tasks/verifyFacet.js");
 require("./tasks/massRegisterERC721.ts");
 require("./tasks/deployUpgrade");
+require("./tasks/transferOwnership");
 
 // This is a sample Buidler task. To learn how to create your own go to
 // https://buidler.dev/guides/create-task.html
@@ -46,7 +47,7 @@ module.exports = {
     matic: {
       url: process.env.MATIC_URL,
       // url: 'https://rpc-mainnet.maticvigil.com/',
-      accounts: [process.env.ITEM_MANAGER],
+      accounts: [process.env.SECRET],
       // blockGasLimit: 20000000,
       blockGasLimit: 20000000,
       gasPrice: 10000000000,

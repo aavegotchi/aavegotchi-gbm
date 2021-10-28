@@ -1,4 +1,4 @@
-const { h2tokenIds } = require("./data/h2tokenIds");
+import { auction1 } from "./data/auction1";
 
 interface AuctionPreset {
   startTime: number;
@@ -117,12 +117,12 @@ export default <AuctionERC721Config>{
     },
   },
   auctionTokenCounts: {
-    none: h2tokenIds.none.length,
-    low: h2tokenIds.low.length,
-    medium: h2tokenIds.medium.length,
-    high: h2tokenIds.high.length,
-    degen: h2tokenIds.degen.length,
-    test: h2tokenIds.test.length,
+    none: 0,
+    low: 0,
+    medium: auction1.length,
+    high: 0,
+    degen: 0,
+    test: 0,
   },
 
   initialIndex: 0, // none previous, so start at 0
