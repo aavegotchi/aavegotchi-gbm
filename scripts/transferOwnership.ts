@@ -2,10 +2,12 @@ import { run, ethers } from "hardhat";
 import { TransferOwnershipTaskArgs } from "../tasks/transferOwnership";
 
 async function transferOwner() {
-  console.log("Transferring owner");
+  const newOwner = "0x22262f6e7969CE2bA58238f33e717C36060F33B4";
+
+  console.log("Transferring owner to:", newOwner);
   const taskArgs: TransferOwnershipTaskArgs = {
-    newOwner: "0x94cb5C277FCC64C274Bd30847f0821077B231022",
-    useMultisig: true,
+    newOwner: newOwner,
+    useMultisig: false,
   };
 
   await run("transferOwnership", taskArgs);

@@ -11,7 +11,7 @@ import { AuctionPreset } from "../types";
 import { Contract } from "@ethersproject/contracts";
 import { BigNumber } from "@ethersproject/bignumber";
 import { request } from "graphql-request";
-import { SettingsFacet } from "../typechain";
+import { GBMFacet, SettingsFacet } from "../typechain";
 
 export interface MassRegisterERC721TaskArgs {
   gbmDiamondAddress: string;
@@ -155,7 +155,7 @@ async function deployAuction(
   nonceManagedSigner: NonceManager,
   gbmAddress: string,
   deployer: string,
-  gbm: Contract,
+  gbm: GBMFacet,
   hre: HardhatRuntimeEnvironment
 ) {
   let totalGasUsed: BigNumber = hre.ethers.BigNumber.from("0");
@@ -180,9 +180,9 @@ async function deployAuction(
     });
     await tx.wait();
   } else {
-    console.log("Approved to transfer!:");
+    // console.log("Approved to transfer!:");
   }
-
+  /*
   console.log(
     `[${chalk.cyan(hre.network.name)} ${chalk.yellow(
       auctionConfig.id
@@ -196,60 +196,33 @@ async function deployAuction(
           1
       )}`
   );
+  */
 
   //   let promises = [];
 
   const query = `
-    {first1000: auctions(first:1000, where:{type:"erc721", incentivePreset:"${preset}", contractAddress:"${tokenContractAddress}"}) {
-      id
-      tokenId
-    }
-    first2000: auctions(skip:1000, first:1000, where:{type:"erc721", incentivePreset:"${preset}", contractAddress:"${tokenContractAddress}"}) {
-      id
-      tokenId
-    }
-    first3000: auctions(skip: 2000, first:1000, where:{type:"erc721", incentivePreset:"${preset}", contractAddress:"${tokenContractAddress}"}) {
-      id
-      tokenId
-    }
-    first4000: auctions(skip: 3000, first:1000, where:{type:"erc721", incentivePreset:"${preset}", contractAddress:"${tokenContractAddress}"}) {
-      id
-      tokenId
-    }
-    first5000: auctions(skip: 4000, first:1000, where:{type:"erc721", incentivePreset:"${preset}", contractAddress:"${tokenContractAddress}"}) {
-      id
-      tokenId
-    }
-  }
+  {auctions(where:{contractAddress:"${tokenContractAddress}", tokenId_in:[${tokenIds.join(
+    ","
+  )}]}) {
+    id
+    tokenId
+  }}
     `;
+
   //  const url =
   // "https://aavegotchi2.stakesquid-frens.gq/subgraphs/id/QmRJbPF5W1ujDUUZymmeYu4Xo7xfSP6gmi8NHDbX99pDDL";
 
   const url =
-    "https://api.thegraph.com/subgraphs/name/aavegotchi/aavegotchi-gbm-v2-kovan";
+    "https://api.thegraph.com/subgraphs/name/aavegotchi/aavegotchi-gbm-v2";
 
   const response = await request(url, query);
 
-  // console.log("response:", response);
-
   let deployed: string[] = [];
-  response.first1000.forEach((auctionObj: any) => {
+  response.auctions.forEach((auctionObj: any) => {
     deployed.push(auctionObj.tokenId);
   });
 
-  response.first2000.forEach((auctionObj: any) => {
-    deployed.push(auctionObj.tokenId);
-  });
-
-  response.first3000.forEach((auctionObj: any) => {
-    deployed.push(auctionObj.tokenId);
-  });
-
-  response.first4000.forEach((auctionObj: any) => {
-    deployed.push(auctionObj.tokenId);
-  });
-
-  console.log("Already deployed:", deployed.length);
+  console.log("Already deployed:", deployed.join(","));
 
   console.log(
     `${chalk.red(preset)} preset has ${tokenIds.length} tokens to mint.`
@@ -262,85 +235,33 @@ async function deployAuction(
     return !deployed.includes(tokenId.toString());
   });
 
-  let remaining = filteredTokenIds.length - sent;
-
   console.log("filtered token ids:", filteredTokenIds);
 
-  //   filteredTokenIds = [];
-
-  /*
-  while (remaining > 0) {
-    if (remaining < auctionSteps) auctionSteps = remaining;
-
-    console.log("remaining:", remaining);
-
-    let finalTokenIds: string[] = filteredTokenIds.slice(
-      sent,
-      sent + auctionSteps
-    );
-    if (finalTokenIds.length > 0) {
-        */
-  console.log(
-    `Creating Auctions for ${tokenIds.toString()} with GBM address: ${gbmAddress} for token contract address: ${tokenContractAddress}`
-  );
-
-  try {
-    const r = await gbm.registerMassERC721Each(
-      gbmAddress,
-      true,
-      tokenContractAddress,
-      tokenIds,
-      { gasPrice: gasPrice }
-    );
-
-    console.log("tx hash:", r.hash);
-
-    await r.wait();
-
+  if (filteredTokenIds.length > 0) {
     console.log(
-      `Created auctions for ${tokenIds.toString()}, using ${r.gasLimit.toString()} gas`
+      `Creating Auctions for ${filteredTokenIds.toString()} with GBM address: ${gbmAddress} for token contract address: ${tokenContractAddress}`
     );
-  } catch (error) {
-    console.log("error:", error);
-  }
 
-  //   totalGasUsed = totalGasUsed.add(r.gasLimit);
+    try {
+      const r = await gbm.registerMassERC721Each(
+        gbmAddress,
+        true,
+        tokenContractAddress,
+        filteredTokenIds,
+        { gasPrice: gasPrice }
+      );
 
-  //   promises.push(r);
+      console.log("tx hash:", r.hash, r.gasLimit.toString());
 
-  //   sent += auctionSteps;
-  //   remaining -= auctionSteps;
+      await r.wait();
 
-  /*
-      logger.info({
-        tx: {
-          hash: r.hash,
-          from: r.from,
-          to: r.to,
-          nonce: r.nonce,
-          chainId: r.chainId,
-          networkId: hardhat.network.name,
-        },
-        params: {
-          gbmAddress: gbmAddress,
-          useDefault: true,
-          erc721address: erc721address,
-          tokenIds: tokenIds.slice(sent, sent + auctionSteps),
-        },
-      });
-    } else {
-      throw "That's it!";
+      console.log(
+        `Created auctions for ${tokenIds.toString()}, using ${r.gasLimit.toString()} gas`
+      );
+    } catch (error) {
+      console.log("error:", error);
     }
-    */
-
-  //     }
-
-  //   await Promise.all(promises);
-
-  /*  console.log(
-    `[${chalk.green`✅`}] Completed! Log at ${chalk.yellow(filename)}`
-  );
-  */
-
-  console.log("Used Gas:", totalGasUsed.toString());
+  } else {
+    console.log("No tokens to mint in this batch, skipping to next batch");
+  }
 }

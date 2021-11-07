@@ -4,7 +4,7 @@ import { MassRegisterERC721TaskArgs } from "../../tasks/massRegisterERC721";
 import { maticDiamondAddress } from "../helperFunctions";
 
 async function registerERC721Auctions() {
-  const maxProcess = 1;
+  const maxProcess = 25;
 
   const batches = Math.floor(auction1.length / maxProcess);
   console.log("batches:", batches);
@@ -12,6 +12,7 @@ async function registerERC721Auctions() {
   let currentBatch = 0;
 
   for (let index = 0; index < batches; index++) {
+    console.log("Current batch:", currentBatch);
     const tokenIds = auction1
       .slice(maxProcess * currentBatch, maxProcess * currentBatch + maxProcess)
       .join(",");

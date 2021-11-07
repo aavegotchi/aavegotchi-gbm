@@ -5,11 +5,13 @@ import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { PopulatedTransaction } from "@ethersproject/contracts";
 
 import {
+  gasPrice,
   maticDiamondAddress,
   maticDiamondUpgrader,
 } from "../scripts/helperFunctions";
 import { sendToGnosisSafe } from "../scripts/libraries/multisig/multisig";
 import { OwnershipFacet } from "../typechain";
+import { Signer } from "@ethersproject/abstract-signer";
 
 export interface TransferOwnershipTaskArgs {
   newOwner: string;
@@ -28,7 +30,9 @@ task("transferOwnership", "Mass registers ERC721 in auction")
       const newAddress = taskArgs.newOwner;
       const useMultisig = taskArgs.useMultisig;
 
-      const accounts = await hre.ethers.getSigners();
+      const accounts: Signer[] = await hre.ethers.getSigners();
+
+      console.log("Signer:", await accounts[0].getAddress());
 
       //transfer ownership to multisig
       const ownershipFacet = (await hre.ethers.getContractAt(
@@ -47,6 +51,14 @@ task("transferOwnership", "Mass registers ERC721 in auction")
           );
 
         await sendToGnosisSafe(hre, maticDiamondUpgrader, tx, accounts[0]);
+      } else {
+        const tx = await ownershipFacet.transferOwnership(newAddress, {
+          gasPrice: gasPrice,
+        });
+        await tx.wait();
+
+        const owner = await ownershipFacet.owner();
+        console.log(`Ownership has been transferred to ${owner}`);
       }
     }
   );
