@@ -169,6 +169,8 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         if (s.tokenMapping[_auctionId].tokenKind == bytes4(keccak256("ERC721"))) {
             //0x73ad2146
             IERC721(_ca).safeTransferFrom(address(this), s.auctions[_auctionId].highestBidder, _tid);
+	    //Need to be set to zero to allow subsequent auction registering
+	    s.auctionMapping[_ca][_tid][0] = 0;
         } else if (s.tokenMapping[_auctionId].tokenKind == bytes4(keccak256("ERC1155"))) {
             //0x973bb640
             IERC1155(_ca).safeTransferFrom(address(this), s.auctions[_auctionId].highestBidder, _tid, 1, "");
@@ -212,7 +214,7 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         bytes4 _tokenKind,
         bool _useInitiator
     ) public onlyOwner {
-        modifyAnAuctionToken(_tokenContract, _tokenId, _tokenKind, _useInitiator, 0, false);
+        modifyAnAuctionToken(_tokenContract, _tokenId, _tokenKind, _useInitiator, 0, 0);
     }
 
     /// @notice Register an auction token and emit the relevant AuctionInitialized & AuctionStartTimeUpdated events
@@ -223,16 +225,16 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
     /// @param _useInitiator Set to `false` if you want to use the default value registered for the token contract (if wanting to reset to default,
     /// use `true`)
     /// @param _1155Index Set to 0 if dealing with an ERC-721 or registering new 1155 test. otherwise, set to relevant index you want to reinitialize
-    /// @param _rewrite Set to true if you want to rewrite the data of an existing auction, false otherwise
+    /// @param _rewriteBlock Set to 0 if you want to register a new auction, to the blocknumber of a past registered auction if you want to edit it
     function modifyAnAuctionToken(
         address _tokenContract,
         uint256 _tokenId,
         bytes4 _tokenKind,
         bool _useInitiator,
         uint256 _1155Index,
-        bool _rewrite
+        uint256 _rewriteBlock
     ) internal {
-        if (!_rewrite) {
+        if (_rewriteBlock != 0) {
             _1155Index = s.erc1155TokensIndex[_tokenContract][_tokenId]; //_1155Index was 0 if creating new auctions
             require(s.auctionMapping[_tokenContract][_tokenId][_1155Index] == 0, "The auction aleady exist for the specified token");
         } else {
@@ -258,8 +260,12 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
                 msg.sender == Ownable(_tokenContract).owner() || address(this) == IERC721(_tokenContract).ownerOf(_tokenId),
                 "registerAnAuctionToken: the specified ERC-721 token cannot be auctioned"
             );
-
-            _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind)));
+    
+            if(_rewriteBlock == 0){
+                _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, block.number)));
+            } else {
+                _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, _rewriteBlock)));
+            }
             s.auctionMapping[_tokenContract][_tokenId][0] = _auctionId;
         } else {
             require(
@@ -273,9 +279,13 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
                 "The specified _1155Index have not been reached yet for this token"
             );
 
-            _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, _1155Index)));
+            if(_rewriteBlock == 0){
+                _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, _1155Index, block.number)));
+            } else {
+                _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, _1155Index, _rewriteBlock)));
+            }
 
-            if (!_rewrite) {
+            if (_rewriteBlock != 0) {
                 s.erc1155TokensIndex[_tokenContract][_tokenId] = s.erc1155TokensIndex[_tokenContract][_tokenId] + 1;
                 s.erc1155TokensUnderAuction[_tokenContract][_tokenId] = s.erc1155TokensUnderAuction[_tokenContract][_tokenId] + 1;
             }
