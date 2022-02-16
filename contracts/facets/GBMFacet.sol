@@ -130,7 +130,11 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         uint256 _tid = s.tokenMapping[_auctionId].tokenId;
 
         require(s.collections[_ca].biddingAllowed, "claim: Claiming is currently not allowed");
-        require(getAuctionEndTime(_auctionId) < block.timestamp, "claim: Auction has not yet ended");
+		if(s.auctionSeller[_auctionId] == address(0x0)){ //If it's a primary auction
+			require(getAuctionEndTime(_auctionId) < block.timestamp, "claim: Auction has not yet ended");
+		} else { //If It's a secondary market auction
+			require(getAuctionEndTime(_auctionId) + getAuctionHammerTimeDuration(_auctionId) < block.timestamp, "claim: Auction has not yet ended"); //Accomodating for the cancellation period
+		}
         require(s.auctionItemClaimed[_auctionId] == false, "claim: Item has already been claimed");
 
         //Prevents re-entrancy
@@ -169,8 +173,6 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         if (s.tokenMapping[_auctionId].tokenKind == bytes4(keccak256("ERC721"))) {
             //0x73ad2146
             IERC721(_ca).safeTransferFrom(address(this), s.auctions[_auctionId].highestBidder, _tid);
-	    //Need to be set to zero to allow subsequent auction registering
-	    s.auctionMapping[_ca][_tid][0] = 0;
         } else if (s.tokenMapping[_auctionId].tokenKind == bytes4(keccak256("ERC1155"))) {
             //0x973bb640
             IERC1155(_ca).safeTransferFrom(address(this), s.auctions[_auctionId].highestBidder, _tid, 1, "");
@@ -216,6 +218,32 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
     ) public onlyOwner {
         modifyAnAuctionToken(_tokenContract, _tokenId, _tokenKind, _useInitiator, 0, 0);
     }
+	
+	/// @notice Register an auction token and emit the relevant AuctionInitialized & AuctionStartTimeUpdated events
+    /// Throw if the token owner is not the GBM smart contract/supply of auctionned 1155 token is insufficient
+    /// @param _tokenContract The token contract the auctionned token belong to
+    /// @param _tokenId The token ID of the token being auctionned
+    /// @param _tokenKind either bytes4(keccak256("ERC721")) or bytes4(keccak256("ERC1155"))
+    /// @param _useInitiator Set to `false` if you want to use the default value registered for the token contract (if wanting to reset to default,
+    /// use `true`)
+    function registerAnAuctionTokenSecondaryMarket(
+        address _tokenContract,
+        uint256 _tokenId,
+        bytes4 _tokenKind,
+        bool _useInitiator,
+		address _seller
+    ) public onlyOwner {
+        modifyAnAuctionToken(_tokenContract, _tokenId, _tokenKind, _useInitiator, 0, 0);
+		uint256 localIndex;
+		if (_tokenKind == bytes4(keccak256("ERC721"))){
+			localIndex = s.erc721TokensIndex[_tokenContract][_tokenId] -1;
+			s.auctionSeller[s.auction721Mapping[_tokenContract][_tokenId][localIndex]] = _seller;
+		} else {
+			localIndex =  s.erc1155TokensIndex[_tokenContract][_tokenId] -1;
+			s.auctionSeller[s.auction1155Mapping[_tokenContract][_tokenId][localIndex]] = _seller;
+		}
+		
+    }
 
     /// @notice Register an auction token and emit the relevant AuctionInitialized & AuctionStartTimeUpdated events
     /// Throw if the token owner is not the GBM smart contract/supply of auctionned 1155 token is insufficient
@@ -224,21 +252,35 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
     /// @param _tokenKind either bytes4(keccak256("ERC721")) or bytes4(keccak256("ERC1155"))
     /// @param _useInitiator Set to `false` if you want to use the default value registered for the token contract (if wanting to reset to default,
     /// use `true`)
-    /// @param _1155Index Set to 0 if dealing with an ERC-721 or registering new 1155 test. otherwise, set to relevant index you want to reinitialize
+    /// @param _index Set to 0 if dealing with a registration. Set to desired auction index if you want to reinitialize
     /// @param _rewriteBlock Set to 0 if you want to register a new auction, to the blocknumber of a past registered auction if you want to edit it
     function modifyAnAuctionToken(
         address _tokenContract,
         uint256 _tokenId,
         bytes4 _tokenKind,
         bool _useInitiator,
-        uint256 _1155Index,
+        uint256 _index,
         uint256 _rewriteBlock
     ) internal {
-        if (_rewriteBlock != 0) {
-            _1155Index = s.erc1155TokensIndex[_tokenContract][_tokenId]; //_1155Index was 0 if creating new auctions
-            require(s.auctionMapping[_tokenContract][_tokenId][_1155Index] == 0, "The auction aleady exist for the specified token");
-        } else {
-            require(s.auctionMapping[_tokenContract][_tokenId][_1155Index] != 0, "The auction doesn't exist yet for the specified token");
+
+		uint256 _locIndex;
+		
+        if (_rewriteBlock != 0) { //Case where we are rewriting an auction
+            if (_tokenKind == bytes4(keccak256("ERC721"))) {
+                require(s.auction721Mapping[_tokenContract][_tokenId][_index] != 0, "The auction doesn't exist for the specified parameters");
+            } else {
+                require(s.auction1155Mapping[_tokenContract][_tokenId][_index] != 0, "The auction doesn't exist for the specified parameters");
+            }
+			_locIndex = _index;
+	
+        } else { //Case we are registering an auction
+			if (_tokenKind == bytes4(keccak256("ERC721"))) {
+				_locIndex = s.erc721TokensIndex[_tokenContract][_tokenId];
+				require(s.auction721Mapping[_tokenContract][_tokenId][_locIndex] == 0, "The auction already exist for the specified token");
+            } else {
+				_locIndex = s.erc1155TokensIndex[_tokenContract][_tokenId];
+                require(s.auction1155Mapping[_tokenContract][_tokenId][_locIndex] == 0, "The auction already exist for the specified token");
+            }
         }
 
         //Checking the kind of token being registered
@@ -266,7 +308,11 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
             } else {
                 _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, _rewriteBlock)));
             }
-            s.auctionMapping[_tokenContract][_tokenId][0] = _auctionId;
+			uint256 _721Index = s.erc721TokensIndex[_tokenContract][_tokenId];
+			
+            s.auction721Mapping[_tokenContract][_tokenId][_721Index] = _auctionId;
+            s.erc721TokensIndex[_tokenContract][_tokenId] = _721Index + 1;
+
         } else {
             require(
                 msg.sender == Ownable(_tokenContract).owner() ||
@@ -275,14 +321,14 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
             );
 
             require(
-                _1155Index <= s.erc1155TokensIndex[_tokenContract][_tokenId],
-                "The specified _1155Index have not been reached yet for this token"
+                _locIndex <= s.erc1155TokensIndex[_tokenContract][_tokenId],
+                "The specified _locIndex have not been reached yet for this token"
             );
 
             if(_rewriteBlock == 0){
-                _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, _1155Index, block.number)));
+                _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, _locIndex, block.number)));
             } else {
-                _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, _1155Index, _rewriteBlock)));
+                _auctionId = uint256(keccak256(abi.encodePacked(_tokenContract, _tokenId, _tokenKind, _locIndex, _rewriteBlock)));
             }
 
             if (_rewriteBlock != 0) {
@@ -290,7 +336,7 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
                 s.erc1155TokensUnderAuction[_tokenContract][_tokenId] = s.erc1155TokensUnderAuction[_tokenContract][_tokenId] + 1;
             }
 
-            s.auctionMapping[_tokenContract][_tokenId][_1155Index] = _auctionId;
+            s.auction1155Mapping[_tokenContract][_tokenId][_locIndex] = _auctionId;
         }
 
         s.tokenMapping[_auctionId] = newAuction;
@@ -308,10 +354,45 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         }
 
         //Event emitted when an auction is being setup
-        emit Auction_Initialized(_auctionId, _tokenId, _1155Index, _tokenContract, _tokenKind);
+        emit Auction_Initialized(_auctionId, _tokenId, _locIndex, _tokenContract, _tokenKind);
 
         //Event emitted when the start time of an auction changes (due to admin interaction )
         emit Auction_StartTimeUpdated(_auctionId, getAuctionStartTime(_auctionId));
+    }
+
+
+    function cancelAuction(uint256 _auctionID) public {
+		require(s.auctionSeller[_auctionID] != address(0), "Initial auctions cannot be cancelled");
+		
+        address _ca = s.tokenMapping[_auctionID].contractAddress;
+        uint256 _tid = s.tokenMapping[_auctionID].tokenId;
+        
+        require(s.collections[_ca].biddingAllowed, "claim: Claiming is currently not allowed");
+        require(getAuctionEndTime(_auctionID) < block.timestamp, "cancelAuction: Auction has not yet ended");
+        require(getAuctionEndTime(_auctionID) + getAuctionHammerTimeDuration(_auctionID) > block.timestamp, "cancelAuction: Cancellation time has already ended");
+        
+        require(!s.auctionItemClaimed[_auctionID], "claim: this auction has alredy been claimed");   
+        s.auctionItemClaimed[_auctionID]  = true;
+
+		uint256 _proceeds = s.auctions[_auctionID].highestBid - s.auctions[_auctionID].auctionDebt;
+		
+		//Send the debt + his due incentives from the seller to the highest bidder
+		IERC20(s.erc20Currency).transferFrom(s.auctionSeller[_auctionID], s.auctions[_auctionID].highestBidder, s.auctions[_auctionID].dueIncentives + s.auctions[_auctionID].auctionDebt);
+
+		//INSERT ANY EXTRA FEE HERE
+		
+		//Refund it's bid minus debt to the highest bidder
+		IERC20(s.erc20Currency).transferFrom(address(this), s.auctions[_auctionID].highestBidder, _proceeds);
+
+        // Transfer the token to the owner/canceller
+        if (s.tokenMapping[_auctionID].tokenKind == bytes4(keccak256("ERC721"))){ //0x73ad2146
+            IERC721(_ca).safeTransferFrom(address(this), s.auctionSeller[_tid], _tid);
+        } else if (s.tokenMapping[_auctionID].tokenKind == bytes4(keccak256("ERC1155"))){ //0x973bb640
+            IERC1155(_ca).safeTransferFrom(address(this), s.auctionSeller[_tid], _tid, 1, "");
+            s.erc1155TokensUnderAuction[_ca][_tid] = s.erc1155TokensUnderAuction[_ca][_tid] - 1;
+        }
+
+        emit AuctionCancelled(_auctionID, _tid);
     }
 
     function getAuctionInfo(uint256 _auctionId) external view returns (Auction memory auctionInfo_) {
@@ -336,10 +417,12 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         return s.auctions[_auctionId].dueIncentives;
     }
 
-    function getAuctionID(address _contract, uint256 _tokenID) external view override returns (uint256) {
+	//Deprecated, will assume earliest auctionned token with old mapping
+    function getAuctionID(address _contract, uint256 _tokenID) external view override returns (uint256) { 
         return s.auctionMapping[_contract][_tokenID][0];
     }
 
+	//Deprecated, this function use the old mapping
     function getAuctionID(
         address _contract,
         uint256 _tokenID,
@@ -347,6 +430,19 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
     ) external view override returns (uint256) {
         return s.auctionMapping[_contract][_tokenID][_tokenIndex];
     }
+	
+	function getAuctionID(
+		address _contract,
+        uint256 _tokenID,
+        uint256 _tokenIndex,
+		bytes4 _tokenKind
+    ) external view override returns (uint256) {
+		if (_tokenKind == bytes4(keccak256("ERC721"))) {
+			return s.auction721Mapping[_contract][_tokenID][_tokenIndex];
+		} else {
+			return s.auction1155Mapping[_contract][_tokenID][_tokenIndex];
+		}
+	}
 
     function getTokenKind(uint256 _auctionId) external view override returns (bytes4) {
         return s.tokenMapping[_auctionId].tokenKind;

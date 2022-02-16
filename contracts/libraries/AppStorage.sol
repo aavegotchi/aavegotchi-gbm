@@ -65,7 +65,10 @@ struct AppStorage {
     //Contract address storing the ERC20 currency used in auctions
     address erc20Currency;
     mapping(uint256 => TokenRepresentation) tokenMapping; //_auctionId => token_primaryKey
-    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) auctionMapping; // contractAddress => tokenId => TokenIndex => _auctionId
+
+    //DEPRECATED DUE TO DUAL TOKEN ID SAME CONTRACT
+    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) auctionMapping; // contractAddress => tokenId => TokenIndex => _auctionId  
+
     //var storing individual auction settings. if != null, they take priority over collection settings
     mapping(uint256 => Auction) auctions; //_auctionId => auctions
     mapping(uint256 => bool) auctionItemClaimed;
@@ -74,6 +77,12 @@ struct AppStorage {
     mapping(address => mapping(uint256 => uint256)) erc1155TokensIndex; //Contract => TokenID => Amount being auctionned
     mapping(address => mapping(uint256 => uint256)) erc1155TokensUnderAuction; //Contract => TokenID => Amount being auctionned
     bytes backendPubKey;
+
+    //Secondary market patch
+    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) auction721Mapping; // contractAddress => tokenId => TokenIndex => _auctionId 
+    mapping(address => mapping(uint256 => mapping(uint256 => uint256))) auction1155Mapping; // contractAddress => tokenId => TokenIndex => _auctionId 
+    mapping(address => mapping(uint256 => uint256)) erc721TokensIndex; //Contract => TokenID => Iteration of being auctionned
+    mapping(uint256 => address) auctionSeller; //auctionID => Auction seller Mapping storing who is the seller of a token for a specific auction. 
 }
 
 contract Modifiers {
