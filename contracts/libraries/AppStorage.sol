@@ -7,6 +7,7 @@ struct TokenRepresentation {
     address contractAddress; // The contract address
     uint256 tokenId; // The ID of the token on the contract
     bytes4 tokenKind; // The ERC name of the token implementation bytes4(keccak256("ERC721")) or bytes4(keccak256("ERC1155"))
+    uint256 tokenAmount; // The amount of units that are sold in the auction
 }
 
 struct ContractAddresses {
