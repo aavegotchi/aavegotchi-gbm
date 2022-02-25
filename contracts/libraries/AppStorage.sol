@@ -85,7 +85,7 @@ struct AppStorage {
     mapping(address => mapping(uint256 => uint256)) erc721TokensIndex; //Contract => TokenID => Iteration of being auctionned
     mapping(uint256 => address) auctionSeller; //auctionID => Auction seller Mapping storing who is the seller of a token for a specific auction. 
     mapping(uint256 => Collection) auctionPresets; // presestID => Configuration parameters collection
-    mapping(uint256 => address) secundaryMarketTokenContract; //tokenContractId => Token contract address
+    mapping(uint256 => address) secondaryMarketTokenContract; //tokenContractId => Token contract address
 }
 
 contract Modifiers {

@@ -233,7 +233,7 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         uint256 _tokenAmount,
         uint256 _auctionPresetID
     ) public {
-        address _tokenContract = s.secundaryMarketTokenContract[_contractID];
+        address _tokenContract = s.secondaryMarketTokenContract[_contractID];
         modifyAnAuctionToken(_tokenContract, _tokenId, _tokenKind, false, 0, 0, _tokenAmount, _auctionPresetID);
 		uint256 localIndex;
 		if (_tokenKind == bytes4(keccak256("ERC721"))){
@@ -251,8 +251,8 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
     /// Throw if the token owner is not the GBM smart contract
     /// @param _contractID Id of the token contract the auctionned token belong to
     /// @param _tokenContract The token contract the auctionned token belong to
-    function secundaryMarketTokenContract(uint256 _contractID, address _tokenContract) external onlyOwner {
-        s.secundaryMarketTokenContract[_contractID] = _tokenContract;
+    function secondaryMarketTokenContract(uint256 _contractID, address _tokenContract) external onlyOwner {
+        s.secondaryMarketTokenContract[_contractID] = _tokenContract;
     }
 
     /// @notice Register an auction token and emit the relevant AuctionInitialized & AuctionStartTimeUpdated events
