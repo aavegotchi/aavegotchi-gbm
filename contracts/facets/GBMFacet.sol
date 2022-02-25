@@ -217,34 +217,42 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         bytes4 _tokenKind,
         bool _useInitiator
     ) public onlyOwner {
-        modifyAnAuctionToken(_tokenContract, _tokenId, _tokenKind, _useInitiator, 0, 0, 1);
+        modifyAnAuctionToken(_tokenContract, _tokenId, _tokenKind, _useInitiator, 0, 0, 1, 0);
     }
 	
 	/// @notice Register an auction token and emit the relevant AuctionInitialized & AuctionStartTimeUpdated events
     /// Throw if the token owner is not the GBM smart contract/supply of auctionned 1155 token is insufficient
-    /// @param _tokenContract The token contract the auctionned token belong to
+    /// @param _contractID Id of the token contract the auctionned token belong to
     /// @param _tokenId The token ID of the token being auctionned
     /// @param _tokenKind either bytes4(keccak256("ERC721")) or bytes4(keccak256("ERC1155"))
-    /// @param _useInitiator Set to `false` if you want to use the default value registered for the token contract (if wanting to reset to default,
-    /// use `true`)
+    /// @param _auctionPresetID Choosen preset for the auction
     function registerAnAuctionTokenSecondaryMarket(
-        address _tokenContract,
+        uint256 _contractID,
         uint256 _tokenId,
         bytes4 _tokenKind,
-        bool _useInitiator,
-		address _seller,
-        uint256 _tokenAmount
-    ) public onlyOwner {
-        modifyAnAuctionToken(_tokenContract, _tokenId, _tokenKind, _useInitiator, 0, 0, _tokenAmount);
+        uint256 _tokenAmount,
+        uint256 _auctionPresetID
+    ) public {
+        address _tokenContract = s.secundaryMarketTokenContract[_contractID];
+        modifyAnAuctionToken(_tokenContract, _tokenId, _tokenKind, false, 0, 0, _tokenAmount, _auctionPresetID);
 		uint256 localIndex;
 		if (_tokenKind == bytes4(keccak256("ERC721"))){
+            IERC721(_tokenContract).safeTransferFrom(msg.sender, address(this), _tokenId);
 			localIndex = s.erc721TokensIndex[_tokenContract][_tokenId] -1;
-			s.auctionSeller[s.auction721Mapping[_tokenContract][_tokenId][localIndex]] = _seller;
+			s.auctionSeller[s.auction721Mapping[_tokenContract][_tokenId][localIndex]] = msg.sender;
 		} else {
+            IERC1155(_tokenContract).safeTransferFrom(msg.sender, address(this), _tokenId, _tokenAmount, "");
 			localIndex =  s.erc1155TokensIndex[_tokenContract][_tokenId] -1;
-			s.auctionSeller[s.auction1155Mapping[_tokenContract][_tokenId][localIndex]] = _seller;
+			s.auctionSeller[s.auction1155Mapping[_tokenContract][_tokenId][localIndex]] = msg.sender;
 		}
-		
+    }
+
+	/// @notice Register a token contract to be use in the secundary market
+    /// Throw if the token owner is not the GBM smart contract
+    /// @param _contractID Id of the token contract the auctionned token belong to
+    /// @param _tokenContract The token contract the auctionned token belong to
+    function secundaryMarketTokenContract(uint256 _contractID, address _tokenContract) external onlyOwner {
+        s.secundaryMarketTokenContract[_contractID] = _tokenContract;
     }
 
     /// @notice Register an auction token and emit the relevant AuctionInitialized & AuctionStartTimeUpdated events
@@ -256,6 +264,8 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
     /// use `true`)
     /// @param _index Set to 0 if dealing with a registration. Set to desired auction index if you want to reinitialize
     /// @param _rewriteBlock Set to 0 if you want to register a new auction, to the blocknumber of a past registered auction if you want to edit it
+    /// @param _tokenAmount Amount of units of the token that are going to sold in the auction
+    /// @param _auctionPresetID Choosen preset for the auction
     function modifyAnAuctionToken(
         address _tokenContract,
         uint256 _tokenId,
@@ -263,7 +273,8 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         bool _useInitiator,
         uint256 _index,
         uint256 _rewriteBlock,
-        uint256 _tokenAmount
+        uint256 _tokenAmount,
+        uint256 _auctionPresetID
     ) internal {
 
 		uint256 _locIndex;
@@ -357,6 +368,20 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
             s.auctions[_auctionId].bidMultiplier = s.initiatorInfo.bidMultiplier;
         }
 
+        if (_auctionPresetID != 0) {
+            s.auctions[_auctionId].owner = LibDiamond.contractOwner();
+            s.auctions[_auctionId].startTime = s.auctionPresets[_auctionPresetID].startTime;
+            s.auctions[_auctionId].endTime = s.auctionPresets[_auctionPresetID].endTime;
+            s.auctions[_auctionId].hammerTimeDuration = s.auctionPresets[_auctionPresetID].hammerTimeDuration;
+            s.auctions[_auctionId].bidDecimals = s.auctionPresets[_auctionPresetID].bidDecimals;
+            s.auctions[_auctionId].stepMin = s.auctionPresets[_auctionPresetID].stepMin;
+            s.auctions[_auctionId].incMin = s.auctionPresets[_auctionPresetID].incMin;
+            s.auctions[_auctionId].incMax = s.auctionPresets[_auctionPresetID].incMax;
+            s.auctions[_auctionId].bidMultiplier = s.auctionPresets[_auctionPresetID].bidMultiplier;
+
+            require(s.auctions[_auctionId].startTime != 0, "Auction startTime has not been set");
+        }
+
         //Event emitted when an auction is being setup
         emit Auction_Initialized(_auctionId, _tokenId, _locIndex, _tokenContract, _tokenKind);
 
@@ -364,7 +389,9 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         emit Auction_StartTimeUpdated(_auctionId, getAuctionStartTime(_auctionId));
     }
 
-
+	/// @notice Seller can cancel an auction during the grace period 
+    /// Throw if the token owner is not the caller of the function
+    /// @param _auctionID The auctionId of the auction to complete
     function cancelAuction(uint256 _auctionID) public {
 		require(s.auctionSeller[_auctionID] != address(0), "Initial auctions cannot be cancelled");
 		
@@ -398,6 +425,47 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         }
 
         emit AuctionCancelled(_auctionID, _tid);
+    }        
+
+	/// @notice Register parameters of auction to be used as presets
+    /// Throw if the token owner is not the GBM smart contract
+    function setAuctionPresets(uint256 _auctionPresetID, 
+        uint256 _startTime,
+        uint256 _endTime,
+        uint256 _hammerTimeDuration,
+        uint256 _bidDecimals,
+        uint256 _stepMin,
+        uint256 _incMin,
+        uint256 _incMax,
+        uint256 _bidMultiplier
+    ) external onlyOwner {
+        s.auctionPresets[_auctionPresetID].startTime = _startTime;
+        s.auctionPresets[_auctionPresetID].endTime = _endTime;
+        s.auctionPresets[_auctionPresetID].hammerTimeDuration = _hammerTimeDuration;
+        s.auctionPresets[_auctionPresetID].bidDecimals = _bidDecimals;
+        s.auctionPresets[_auctionPresetID].stepMin = _stepMin;
+        s.auctionPresets[_auctionPresetID].incMin = _incMin;
+        s.auctionPresets[_auctionPresetID].incMax = _incMax;
+        s.auctionPresets[_auctionPresetID].bidMultiplier = _bidMultiplier;
+    }
+
+    function getAuctionPresets(uint256 _auctionPresetID) public view returns(uint256 _startTime,
+        uint256 _endTime,
+        uint256 _hammerTimeDuration,
+        uint256 _bidDecimals,
+        uint256 _stepMin,
+        uint256 _incMin,
+        uint256 _incMax,
+        uint256 _bidMultiplier) 
+    {
+        _startTime = s.auctionPresets[_auctionPresetID].startTime;
+        _endTime = s.auctionPresets[_auctionPresetID].endTime;
+        _hammerTimeDuration = s.auctionPresets[_auctionPresetID].hammerTimeDuration;
+        _bidDecimals = s.auctionPresets[_auctionPresetID].bidDecimals;
+        _stepMin = s.auctionPresets[_auctionPresetID].stepMin;
+        _incMin = s.auctionPresets[_auctionPresetID].incMin;
+        _incMax = s.auctionPresets[_auctionPresetID].incMax;
+        _bidMultiplier = s.auctionPresets[_auctionPresetID].bidMultiplier;
     }
 
     function getAuctionInfo(uint256 _auctionId) external view returns (Auction memory auctionInfo_) {
