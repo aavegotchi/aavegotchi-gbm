@@ -34,6 +34,8 @@ interface IGBM {
 
     event Auction_ItemClaimed(uint256 indexed _auctionID);
 
+    event AuctionCancelled(uint256 indexed _auctionId, uint256 _tokenId);
+
     //    function bid(
     //        uint256 _auctionID,
     //        uint256 _bidAmount,
@@ -46,13 +48,11 @@ interface IGBM {
 
     function erc20Currency() external view returns (address);
 
-    function getAuctionID(address _contract, uint256 _tokenID) external view returns (uint256);
+	//DEPRECATED
+    function getAuctionID(address _contract, uint256 _tokenID) external view returns (uint256); 
 
-    function getAuctionID(
-        address _contract,
-        uint256 _tokenID,
-        uint256 _tokenIndex
-    ) external view returns (uint256);
+	//DEPRECATED
+    function getAuctionID(address _contract, uint256 _tokenID, uint256 _tokenIndex) external view returns (uint256);
 
     function getTokenId(uint256 _auctionId) external view returns (uint256);
 
@@ -83,4 +83,6 @@ interface IGBM {
     function getAuctionIncMax(uint256 _auctionId) external view returns (uint256);
 
     function getAuctionBidMultiplier(uint256 _auctionId) external view returns (uint256);
+	
+	function getAuctionID(address _contract, uint256 _tokenID, uint256 _tokenIndex, bytes4 _tokenKind) external view returns (uint256);
 }

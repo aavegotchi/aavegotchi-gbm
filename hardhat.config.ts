@@ -8,11 +8,11 @@ import * as dotenv from "dotenv";
 import "@typechain/hardhat";
 
 dotenv.config({ path: __dirname + "/.env" });
-require("./tasks/generateDiamondABI.js");
-require("./tasks/verifyFacet.js");
-require("./tasks/massRegisterERC721.ts");
-require("./tasks/deployUpgrade");
-require("./tasks/transferOwnership");
+// require("./tasks/generateDiamondABI.js");
+// require("./tasks/verifyFacet.js");
+// require("./tasks/massRegisterERC721.ts");
+// require("./tasks/deployUpgrade");
+// require("./tasks/transferOwnership");
 
 // This is a sample Buidler task. To learn how to create your own go to
 // https://buidler.dev/guides/create-task.html
@@ -33,11 +33,11 @@ module.exports = {
     hardhat: {
       forking: {
         url: process.env.MATIC_URL,
-        timeout: 120000,
+        // timeout: 1200000,
         // blockNumber: 12552123
         // blockNumber: 13024371
       },
-      blockGasLimit: 20000000,
+      blockGasLimit: 200000000,
       timeout: 120000,
       gas: "auto",
     },
