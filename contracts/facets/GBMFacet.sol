@@ -235,7 +235,7 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
         uint256 _auctionPresetID,
         uint256 _auctionStartTime
     ) public {
-        address _tokenContract = s.secundaryMarketTokenContract[_contractID];
+        address _tokenContract = s.secondaryMarketTokenContract[_contractID];
         require(_tokenContract != address(0), "ContractID does not exist");
         require(_auctionStartTime > block.timestamp, "Start time in the past");
         require(s.auctionPresets[_auctionPresetID].duration != 0, "Preset parameters are not correct");
@@ -251,8 +251,8 @@ contract GBMFacet is IGBM, IERC1155TokenReceiver, IERC721TokenReceiver, Modifier
     /// Throw if the token owner is not the GBM smart contract
     /// @param _contractID Id of the token contract the auctionned token belong to
     /// @param _tokenContract The token contract the auctionned token belong to
-    function secundaryMarketTokenContract(uint256 _contractID, address _tokenContract) external onlyOwner {
-        s.secundaryMarketTokenContract[_contractID] = _tokenContract;
+    function secondaryMarketTokenContract(uint256 _contractID, address _tokenContract) external onlyOwner {
+        s.secondaryMarketTokenContract[_contractID] = _tokenContract;
     }
 
     /// @notice Register an auction token and emit the relevant AuctionInitialized & AuctionStartTimeUpdated events
