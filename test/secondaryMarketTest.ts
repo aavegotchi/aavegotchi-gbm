@@ -1,6 +1,6 @@
 //import { BytesLike, ethers } from "ethers";
 
-import { Signer } from "ethers";
+import { BigNumber, Signer } from "ethers";
 import { BytesLike, parseEther, solidityKeccak256 } from "ethers/lib/utils";
 //@ts-ignore
 import { ethers, network } from "hardhat";
@@ -14,6 +14,7 @@ import { deployUpgrade } from "../scripts/upgrades/upgrade-secondaryMarkets";
 import {
   ERC1155Generic,
   ERC20Generic,
+  ERC721Generic,
   GBMFacet,
   OwnershipFacet,
   SettingsFacet,
@@ -37,6 +38,26 @@ async function stopPrank(address: string) {
     params: [address],
   });
 }
+//@ts-ignore
+const key: string = process.env.SECRET_2;
+let backendSigner = new ethers.Wallet(key);
+
+async function constructSig(
+  bidder: string,
+  auctionID: string,
+  bidAmount: BigNumber,
+  lastHighestBid: string | BigNumber
+) {
+  const messageHash = ethers.utils.solidityKeccak256(
+    ["address", "uint256", "uint256", "uint256"],
+    [bidder, auctionID, bidAmount, lastHighestBid]
+  );
+  const signedMessage = await backendSigner.signMessage(
+    ethers.utils.arrayify(messageHash)
+  );
+  const Sig = ethers.utils.arrayify(signedMessage);
+  return Sig;
+}
 
 async function toSigner(address: string) {
   const genericSigner = await ethers.getSigner(address);
@@ -46,12 +67,16 @@ let ownerSigner: Signer;
 let gbmFacet: GBMFacet;
 let ghst: ERC20Generic;
 let erc1155: ERC1155Generic;
+let erc721: ERC721Generic;
 let owner: string;
 let erc1155auctionId1: string;
 let erc1155auctionId2: string;
+let erc721auctionId1: string;
+let erc721auctionId2: string;
+
 let currentHighestBid;
 const erc1155ContractID = 1010;
-const erc721ContractId = 1111;
+const erc721ContractID = 1111;
 const pubkey: BytesLike =
   "0x718930fee804b7750072037bd966235a7b7af8e63b315d02e1d58de1b8522316b630c93cd9eeba1f7fd46fdabbdf102260b80e8e42cb28c73ab0ba66a9f3de6f";
 const erc1155typeID: BytesLike = "0x973bb640";
@@ -62,6 +87,7 @@ const bidder3 = "0x3201dd0a33187968c134e55a925b69ce0fdeba22";
 const ghstAddress = "0x385Eeac5cB85A38A9a07A70c73e0a3271CfB54A7";
 const auctionOwner = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266";
 let correctSig;
+let nftSig1;
 
 //Auction Preset params
 let startTime = Math.floor(Date.now() / 1000) - 1000;
@@ -80,8 +106,6 @@ const thirdBid = ethers.utils.parseEther("5000");
 describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
   this.timeout(300000);
   //@ts-ignore
-  const key: string = process.env.SECRET_2;
-  let backendSigner = new ethers.Wallet(key);
   before(async function () {
     await network.provider.send("hardhat_setBalance", [
       bidder1,
@@ -96,10 +120,19 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
     erc1155 = (await mockErc1155.deploy()) as ERC1155Generic;
     await erc1155.deployed();
 
-    //mint 3 different tokens
+    //deploy sample ERC721
+    const mockErc721 = await ethers.getContractFactory("ERC721Generic");
+    erc721 = (await mockErc721.deploy()) as ERC721Generic;
+    await erc721.deployed();
+
+    //mint 3 different erc1155 tokens
     await erc1155["mint(uint256,uint256)"](0, 2);
     await erc1155["mint(uint256,uint256)"](1, 2);
     await erc1155["mint(uint256,uint256)"](2, 2);
+
+    //mint 2 different erc721 tokens
+    await erc721["mint()"]();
+    await erc721["mint()"]();
 
     const ownershipFacet = (await ethers.getContractAt(
       "OwnershipFacet",
@@ -119,6 +152,7 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
     ownerSigner = await ethers.getSigner(owner);
     //approve diamond to transfer tokens
     await erc1155.setApprovalForAll(maticDiamondAddress, true);
+    await erc721.setApprovalForAll(maticDiamondAddress, true);
 
     //change backendSigner
     const settingsFacet = (await ethers.getContractAt(
@@ -159,12 +193,16 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
   });
 
   ///ERC1155
-  it("Can create secondary  markets for different tokenIds of the same token contract", async function () {
-    //register auction token address
+  ///ERC721
+  it("Can create secondary markets for different tokenIds of the same token contract", async function () {
+    //register auction token address for erc1155 and erc721
     await prank(owner);
     await gbmFacet
       .connect(ownerSigner)
       .secondaryMarketTokenContract(erc1155ContractID, erc1155.address);
+    await gbmFacet
+      .connect(ownerSigner)
+      .secondaryMarketTokenContract(erc721ContractID, erc721.address);
 
     //try to auction incorrect/ amount of erc1155 tokens
     await expect(
@@ -177,10 +215,22 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
       )
     ).to.reverted;
 
+    //try to auction incorrect id of erc721 token
+    await expect(
+      gbmFacet.registerAnAuctionTokenSecondaryMarket(
+        erc721ContractID,
+        10,
+        erc721typeID,
+        0,
+        111
+      )
+    ).to.reverted;
+
     //set bidding allowed contract wide
     await gbmFacet
       .connect(ownerSigner)
       .setBiddingAllowed(erc1155.address, true);
+    await gbmFacet.connect(ownerSigner).setBiddingAllowed(erc721.address, true);
 
     //make sure only token owner can create auction
     await expect(
@@ -197,6 +247,20 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
       "registerAnAuctionToken:  the specified ERC-1155 token cannot be auctionned"
     );
 
+    await expect(
+      gbmFacet
+        .connect(ownerSigner)
+        .registerAnAuctionTokenSecondaryMarket(
+          erc721ContractID,
+          0,
+          erc721typeID,
+          0,
+          111
+        )
+    ).to.revertedWith(
+      "registerAnAuctionToken: the specified ERC-721 token cannot be auctioned"
+    );
+
     //register auction tokens for secondary market
     //use default auctionPreset
     const tx = await gbmFacet.registerAnAuctionTokenSecondaryMarket(
@@ -210,7 +274,7 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
     //@ts-ignore
     erc1155auctionId1 = txResolved.events[0].args[0].toString();
 
-    //try to register the same token with same index
+    //try to register the same token with same id
     await expect(
       gbmFacet.registerAnAuctionTokenSecondaryMarket(
         erc1155ContractID,
@@ -221,8 +285,8 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
       )
     ).to.revertedWith("The auction already exist for the specified token");
 
-    //creating second auction
-    //use second preset
+    //creating second erc1155 auction
+    //use first preset
     const tx2 = await gbmFacet.registerAnAuctionTokenSecondaryMarket(
       erc1155ContractID,
       1,
@@ -234,6 +298,43 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
     const txResolved2 = await tx2.wait();
     //@ts-ignore
     erc1155auctionId2 = txResolved2.events[0].args[0];
+
+    //creating first erc721 auction
+    //use second preset
+    const tx3 = await gbmFacet.registerAnAuctionTokenSecondaryMarket(
+      erc721ContractID,
+      0,
+      erc721typeID,
+      1,
+      111
+    );
+
+    const txResolved3 = await tx3.wait();
+    //@ts-ignore
+    erc721auctionId1 = txResolved3.events[0].args[0];
+
+    const tx4 = await gbmFacet.registerAnAuctionTokenSecondaryMarket(
+      erc721ContractID,
+      1,
+      erc721typeID,
+      1,
+      112
+    );
+
+    const txResolved4 = await tx4.wait();
+    //@ts-ignore
+    erc721auctionId2 = txResolved4.events[0].args[0];
+
+    //cannot auction a token already in an auction
+    await expect(
+      gbmFacet.registerAnAuctionTokenSecondaryMarket(
+        erc721ContractID,
+        1,
+        erc721typeID,
+        1,
+        111
+      )
+    ).to.be.reverted;
   });
 
   it("Can bid on open secondary auctions,do incentive calculations ", async function () {
@@ -258,41 +359,44 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
       .connect(await toSigner(bidder3))
       .transfer(auctionOwner, ethers.utils.parseEther("1000"));
     await prank(owner);
-    //construct messageHash
-    let messageHash = ethers.utils.solidityKeccak256(
-      ["address", "uint256", "uint256", "uint256"],
-      [bidder1, erc1155auctionId1, firstBid, "0"]
-    );
-    let signedMessage = await backendSigner.signMessage(
-      ethers.utils.arrayify(messageHash)
-    );
-    correctSig = ethers.utils.arrayify(signedMessage);
+
+    correctSig = await constructSig(bidder1, erc1155auctionId1, firstBid, "0");
+    nftSig1 = await constructSig(bidder1, erc721auctionId1, firstBid, "0");
 
     //bidder1 bids 100ghst on both auctions
+
+    expect(
+      await gbmFacet
+        .connect(await toSigner(bidder1))
+        .commitBid(erc1155auctionId1, "0", "0", correctSig)
+    ).to.revertedWith("bid: _bidAmount cannot be 0");
+
     await gbmFacet
       .connect(await toSigner(bidder1))
       .commitBid(erc1155auctionId1, firstBid, 0, correctSig);
-    const messageHash2 = ethers.utils.solidityKeccak256(
-      ["address", "uint256", "uint256", "uint256"],
-      [bidder1, erc1155auctionId2, firstBid, "0"]
+
+    await gbmFacet
+      .connect(await toSigner(bidder1))
+      .commitBid(erc721auctionId1, firstBid, 0, nftSig1);
+
+    let correctSig2 = await constructSig(
+      bidder1,
+      erc1155auctionId2,
+      firstBid,
+      "0"
     );
-    const signedMessage2 = await backendSigner.signMessage(
-      ethers.utils.arrayify(messageHash2)
-    );
-    let correctSig2 = ethers.utils.arrayify(signedMessage2);
 
     await gbmFacet
       .connect(await toSigner(bidder1))
       .commitBid(erc1155auctionId2, firstBid, 0, correctSig2);
 
-    messageHash = ethers.utils.solidityKeccak256(
-      ["address", "uint256", "uint256", "uint256"],
-      [bidder2, erc1155auctionId1, firstBid, firstBid]
+    correctSig = await constructSig(
+      bidder2,
+      erc1155auctionId1,
+      firstBid,
+      firstBid
     );
-    signedMessage = await backendSigner.signMessage(
-      ethers.utils.arrayify(messageHash)
-    );
-    correctSig = ethers.utils.arrayify(signedMessage);
+
     await prank(bidder2);
     //cannot bid lower or equal to the minimum bid
     await expect(
@@ -307,15 +411,12 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
     );
     //place bid normally
     //bidder2 bids 1000ghst
-    messageHash = ethers.utils.solidityKeccak256(
-      ["address", "uint256", "uint256", "uint256"],
-      [bidder2, erc1155auctionId1, secondBid, firstBid]
+    correctSig = await constructSig(
+      bidder2,
+      erc1155auctionId1,
+      secondBid,
+      firstBid
     );
-
-    signedMessage = await backendSigner.signMessage(
-      ethers.utils.arrayify(messageHash)
-    );
-    correctSig = ethers.utils.arrayify(signedMessage);
 
     await gbmFacet
       .connect(await toSigner(bidder2))
@@ -328,16 +429,14 @@ describe("Test ERC1155 and ERC721 GBM Secondary ", async function () {
     dueIncentives = await gbmFacet.getAuctionDueIncentives(erc1155auctionId1);
     balBefore = await ghst.balanceOf(bidder2);
     await prank(bidder3);
-    //bidder3 bids 5000ghst
-    messageHash = ethers.utils.solidityKeccak256(
-      ["address", "uint256", "uint256", "uint256"],
-      [bidder3, erc1155auctionId1, thirdBid, secondBid]
-    );
 
-    signedMessage = await backendSigner.signMessage(
-      ethers.utils.arrayify(messageHash)
+    //bidder3 bids 5000ghst
+    correctSig = await constructSig(
+      bidder3,
+      erc1155auctionId1,
+      thirdBid,
+      secondBid
     );
-    correctSig = ethers.utils.arrayify(signedMessage);
 
     await gbmFacet
       .connect(await toSigner(bidder3))

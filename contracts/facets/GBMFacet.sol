@@ -419,7 +419,7 @@ error NotAuctionOwner();
     /// @param _auctionID The auctionId of the auction to cancel
     function cancelAuction(uint256 _auctionID) public {
         require(s.auctionSeller[_auctionID] != address(0), "Initial auctions cannot be cancelled");
-
+        if(s.auctionSeller[_auctionID]!=msg.sender) revert NotAuctionOwner();
 
         address _ca = s.tokenMapping[_auctionID].contractAddress;
         uint256 _tid = s.tokenMapping[_auctionID].tokenId;
