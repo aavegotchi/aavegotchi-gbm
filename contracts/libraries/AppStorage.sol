@@ -56,6 +56,7 @@ struct Collection {
     uint256 incMax; // maximal earned incentives
     uint256 bidMultiplier; // bid incentive growth multiplier
     bool biddingAllowed; // Allow to start/pause ongoing auctions
+    uint256 duration;
 }
 
 struct AppStorage {
